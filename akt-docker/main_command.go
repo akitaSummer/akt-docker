@@ -1,6 +1,7 @@
 package main
 
 import (
+	"akt-docker/cgroups/subsystems"
 	"akt-docker/container"
 	"fmt"
 
@@ -23,9 +24,17 @@ var runCommand = cli.Command{
 		if len(context.Args()) < 1 {
 			return fmt.Errorf("Missing container command")
 		}
-		cmd := context.Args().Get(0)
+		cmdArray := []string{}
+		for _, arg := range context.Args() {
+			cmdArray = append(cmdArray, arg)
+		}
 		tty := context.Bool("ti")
-		Run(tty, cmd)
+		resConf := &subsystems.ResourceConfig{
+			MemoryLimit: context.String("m"),
+			CpuSet:      context.String("cpuset"),
+			CpuShare:    context.String("cpushare"),
+		}
+		Run(tty, cmdArray, resConf)
 		return nil
 	},
 }

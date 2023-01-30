@@ -8,11 +8,28 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
+func NewPipe() (*os.File, *os.File, error) {
+	read, write, err := os.Pipe()
+	if err != nil {
+		return nil, nil, err
+	}
+	return read, write, err
+}
+
 // 创建容器进程
-func NewParentProcess(tty bool, command string) *exec.Cmd {
-	args := []string{"init", command}
+func NewParentProcess(tty bool) (*exec.Cmd, *os.File) {
+	readPipe, writePipe, err := NewPipe()
+	if err != nil {
+		logrus.Errorf("New pipe error %v", err)
+		return nil, nil
+	}
 	// /proc/N/exe 链接到进程的执行命令文件,自己调用了自己，使用这种方式对创建出来的进程进行初始化
-	cmd := exec.Command("/proc/self/exe", args...)
+	intiCmd, err := os.Readlink("/proc/self/exe")
+	if err != nil {
+		logrus.Errorf("get init process error %v", err)
+		return nil, nil
+	}
+	cmd := exec.Command(intiCmd, "init")
 	cmd.SysProcAttr = &syscall.SysProcAttr{
 		Cloneflags: syscall.CLONE_NEWUTS | syscall.CLONE_NEWPID | syscall.CLONE_NEWNS | syscall.CLONE_NEWNET | syscall.CLONE_NEWIPC,
 	}
@@ -23,7 +40,10 @@ func NewParentProcess(tty bool, command string) *exec.Cmd {
 		cmd.Stdout = os.Stdout
 	}
 
-	return cmd
+	// Pipe接上进程
+	cmd.ExtraFiles = []*os.File{readPipe}
+
+	return cmd, writePipe
 }
 
 // 在容器内部执行
