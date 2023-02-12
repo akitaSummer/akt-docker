@@ -40,26 +40,19 @@ func NewParentProcess(tty bool) (*exec.Cmd, *os.File) {
 		cmd.Stdout = os.Stdout
 	}
 
-	// Pipe接上进程
+	// Pipe接上进程, 外带着这个文件句柄去创建子进程
+	/*
+		[vagrant] 11 /proc/self/fd
+		total 0
+		lrwx------ 1 root root 64 Nov 29 11:45 0 -> /dev/pts/5  // 标准输入
+		lrwx------ 1 root root 64 Nov 29 11:45 1 -> /dev/pts/5  // 标准输出
+		lrwx------ 1 root root 64 Nov 29 11:45 2 -> /dev/pts/5  // 标准错误
+		lr-x------ 1 root root 64 Nov 29 11 :45 3 -> /proc/20765/fd
+	*/
 	cmd.ExtraFiles = []*os.File{readPipe}
 
+	// 工作目录，busybox镜像解压至此
+	cmd.Dir = "/root/busybox"
+
 	return cmd, writePipe
-}
-
-// 在容器内部执行
-func RunContainerInitProcess(command string, arg []string) error {
-	logrus.Infof("command %s", command)
-
-	// MS_NOEXEC: 在本文件系统中不允许运行其他程序
-	// MS_NOSUID: 在本系统中运行程序的时候，不允许set-user-ID或set-group-ID。
-	// MS NODEV: 这个参数是自从Linux2.4以来，所有mount的系统都会默认设定的参数
-	defaultMountFlags := syscall.MS_NOEXEC | syscall.MS_NOSUID | syscall.MS_NODEV
-	// 使用 mount 先去挂载 proc 文件系统，以便后面通过 ps 等系统命令去查看当前进程资源的情况
-	syscall.Mount("proc", "/proc", "proc", uintptr(defaultMountFlags), "")
-
-	argv := []string{command}
-	if err := syscall.Exec(command, argv, os.Environ()); err != nil {
-		logrus.Errorf(err.Error())
-	}
-	return nil
 }
