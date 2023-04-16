@@ -17,7 +17,7 @@ func NewPipe() (*os.File, *os.File, error) {
 }
 
 // 创建容器进程
-func NewParentProcess(tty bool) (*exec.Cmd, *os.File) {
+func NewParentProcess(tty bool, volume string) (*exec.Cmd, *os.File) {
 	readPipe, writePipe, err := NewPipe()
 	if err != nil {
 		logrus.Errorf("New pipe error %v", err)
@@ -51,8 +51,12 @@ func NewParentProcess(tty bool) (*exec.Cmd, *os.File) {
 	*/
 	cmd.ExtraFiles = []*os.File{readPipe}
 
+	// 使用 AUFS 系统启动容器
 	// 工作目录，busybox镜像解压至此
-	cmd.Dir = "/root/busybox"
-
+	cmd.ExtraFiles = []*os.File{readPipe}
+	mntURL := "/root/mnt"
+	rootURL := "/root/"
+	NewWorkSpace(rootURL, mntURL, volume)
+	cmd.Dir = mntURL
 	return cmd, writePipe
 }

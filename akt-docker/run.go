@@ -18,9 +18,9 @@ func sendInitCommand(comArray []string, writePipe *os.File) {
 	writePipe.Close()
 }
 
-func Run(tty bool, comArray []string, res *subsystems.ResourceConfig) {
+func Run(tty bool, comArray []string, res *subsystems.ResourceConfig, volume string) {
 	// clone 一个 namespace
-	parent, writePipe := container.NewParentProcess(tty)
+	parent, writePipe := container.NewParentProcess(tty, volume)
 	if parent == nil {
 		log.Errorf("New parent process error")
 		return
@@ -39,5 +39,9 @@ func Run(tty bool, comArray []string, res *subsystems.ResourceConfig) {
 	//对容器设置完限制之后，初始化容器
 	sendInitCommand(comArray, writePipe)
 	parent.Wait()
+	mntURL := "/root/mnt"
+	rootURL := "/root"
+	//修改点
+	container.DeleteWorkSpace(rootURL, mntURL, volume)
 	os.Exit(-1)
 }
