@@ -1,12 +1,47 @@
 package container
 
 import (
+	"akt-docker/constant"
+	"fmt"
 	"os"
 	"os/exec"
 	"syscall"
 
 	"github.com/sirupsen/logrus"
 )
+
+const (
+	RUNNING       = "running"
+	STOP          = "stopped"
+	Exit          = "exited"
+	InfoLoc       = "/var/run/mydocker/"
+	InfoLocFormat = InfoLoc + "%s/"
+	ConfigName    = "config.json"
+	IDLength      = 10
+	LogFile       = "container.log"
+)
+
+// 容器相关目录
+const (
+	RootUrl         = "/root/"
+	lowerDirFormat  = "/root/%s/lower"
+	upperDirFormat  = "/root/%s/upper"
+	workDirFormat   = "/root/%s/work"
+	mergedDirFormat = "/root/%s/merged"
+	overlayFSFormat = "lowerdir=%s,upperdir=%s,workdir=%s"
+)
+
+// 容器信息
+type Info struct {
+	Pid         string   `json:"pid"`         // 容器的init进程在宿主机上的 PID
+	Id          string   `json:"id"`          // 容器Id
+	Name        string   `json:"name"`        // 容器名
+	Command     string   `json:"command"`     // 容器内init运行命令
+	CreatedTime string   `json:"createTime"`  // 创建时间
+	Status      string   `json:"status"`      // 容器的状态
+	Volume      string   `json:"volume"`      // 挂载的数据卷
+	PortMapping []string `json:"portmapping"` // 端口映射
+}
 
 func NewPipe() (*os.File, *os.File, error) {
 	read, write, err := os.Pipe()
@@ -17,7 +52,7 @@ func NewPipe() (*os.File, *os.File, error) {
 }
 
 // 创建容器进程
-func NewParentProcess(tty bool, volume string) (*exec.Cmd, *os.File) {
+func NewParentProcess(tty bool, volume string, containerName string) (*exec.Cmd, *os.File) {
 	readPipe, writePipe, err := NewPipe()
 	if err != nil {
 		logrus.Errorf("New pipe error %v", err)
@@ -38,6 +73,20 @@ func NewParentProcess(tty bool, volume string) (*exec.Cmd, *os.File) {
 		cmd.Stderr = os.Stderr
 		cmd.Stdin = os.Stdin
 		cmd.Stdout = os.Stdout
+	} else {
+		// 对于后台运行容器，将标准输出重定向到日志文件中，便于后续查询
+		dirURL := fmt.Sprintf(InfoLocFormat, containerName)
+		if err := os.MkdirAll(dirURL, constant.Perm0622); err != nil {
+			logrus.Errorf("NewParentProcess mkdir %s error %v", dirURL, err)
+			return nil, nil
+		}
+		stdLogFilePath := dirURL + LogFile
+		stdLogFile, err := os.Create(stdLogFilePath)
+		if err != nil {
+			logrus.Errorf("NewParentProcess create file %s error %v", stdLogFilePath, err)
+			return nil, nil
+		}
+		cmd.Stdout = stdLogFile
 	}
 
 	// Pipe接上进程, 外带着这个文件句柄去创建子进程
