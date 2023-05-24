@@ -48,6 +48,10 @@ var runCommand = cli.Command{
 			Name:  "cpuset",
 			Usage: "cpuset limit",
 		},
+		cli.StringSliceFlag{
+			Name:  "e",
+			Usage: "set environment",
+		},
 	},
 	// 执行函数
 	Action: func(context *cli.Context) error {
@@ -58,6 +62,9 @@ var runCommand = cli.Command{
 		for _, arg := range context.Args() {
 			cmdArray = append(cmdArray, arg)
 		}
+		imageName := cmdArray[0]
+		cmdArray = cmdArray[1:]
+
 		tty := context.Bool("ti")
 		detach := context.Bool("d")
 
@@ -72,7 +79,8 @@ var runCommand = cli.Command{
 			CpuShare:    context.String("cpushare"),
 		}
 		containerName := context.String("name")
-		Run(tty, cmdArray, resConf, volume, containerName)
+		envSlice := context.StringSlice("e")
+		Run(tty, cmdArray, resConf, volume, containerName, imageName, envSlice)
 		return nil
 	},
 }
@@ -89,12 +97,13 @@ var initCommand = cli.Command{
 
 var commitCommand = cli.Command{Name: "commit",
 	Usage: "commit a container into image", Action: func(context *cli.Context) error {
-		if len(context.Args()) < 1 {
-			return fmt.Errorf("Missing container name")
+		if len(context.Args()) < 2 {
+			return fmt.Errorf("missing container name and image name")
 		}
-		imageName := context.Args().Get(0)
-		commitContainer(imageName)
-		return nil
+		containerName := context.Args().Get(0)
+		imageName := context.Args().Get(1)
+
+		return container.CommitContainer(containerName, imageName)
 	},
 }
 
@@ -198,4 +207,55 @@ func logContainer(containerName string) {
 		log.Errorf("Log container Fprint  error %v", err)
 		return
 	}
+}
+
+var execCommand = cli.Command{
+	Name:  "exec",
+	Usage: "exec a command into container",
+	Action: func(context *cli.Context) error {
+		// 如果环境变量存在，说明C代码已经运行过了，即setns系统调用已经执行了，这里就直接返回，避免重复执行
+		if os.Getenv(EnvExecPid) != "" {
+			log.Infof("pid callback pid %v", os.Getgid())
+			return nil
+		}
+		// 格式：mydocker exec 容器名字 命令，因此至少会有两个参数
+		if len(context.Args()) < 2 {
+			return fmt.Errorf("missing container name or command")
+		}
+		containerName := context.Args().Get(0)
+		// 将除了容器名之外的参数作为命令部分
+		var commandArray []string
+		for _, arg := range context.Args().Tail() {
+			commandArray = append(commandArray, arg)
+		}
+		ExecContainer(containerName, commandArray)
+		return nil
+	},
+}
+
+var stopCommand = cli.Command{
+	Name:  "stop",
+	Usage: "stop a container",
+	Action: func(context *cli.Context) error {
+		// 期望输入是：mydocker stop 容器名，如果没有指定参数直接打印错误
+		if len(context.Args()) < 1 {
+			return fmt.Errorf("missing container name")
+		}
+		containerName := context.Args().Get(0)
+		stopContainer(containerName)
+		return nil
+	},
+}
+
+var removeCommand = cli.Command{
+	Name:  "rm",
+	Usage: "remove unused containers",
+	Action: func(context *cli.Context) error {
+		if len(context.Args()) < 1 {
+			return fmt.Errorf("missing container name")
+		}
+		containerName := context.Args().Get(0)
+		removeContainer(containerName)
+		return nil
+	},
 }

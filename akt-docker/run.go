@@ -24,9 +24,9 @@ func sendInitCommand(comArray []string, writePipe *os.File) {
 	writePipe.Close()
 }
 
-func Run(tty bool, comArray []string, res *subsystems.ResourceConfig, volume string, containerName string) {
+func Run(tty bool, comArray []string, res *subsystems.ResourceConfig, volume string, containerName string, imageName string, envSlice []string) {
 	// clone 一个 namespace
-	parent, writePipe := container.NewParentProcess(tty, volume, containerName)
+	parent, writePipe := container.NewParentProcess(tty, volume, containerName, imageName, envSlice)
 	if parent == nil {
 		log.Errorf("New parent process error")
 		return

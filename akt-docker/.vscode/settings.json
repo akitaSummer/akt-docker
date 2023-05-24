@@ -1,3 +1,7 @@
 {
-    "go.toolsEnvVars": {"GOOS" : "linux"}
+  "go.toolsEnvVars": {
+    "CGO_ENABLED": "1",
+    "CC": "gcc",
+    "GOOS": "linux"
+  }
 }
